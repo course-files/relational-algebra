@@ -72,7 +72,7 @@ SELECT version();
 
 ### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/apple/apple-original.svg" width="40"/> A.2 — macOS
 
-#### Option 1 — Homebrew (Recommended)
+#### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/homebrew/homebrew-original-wordmark.svg" width="40" /><br>Option 1 — Homebrew (Recommended)
 
 Homebrew is a package manager for macOS. It is the standard tool used by developers to install software on macOS.
 
@@ -119,508 +119,6 @@ Follow the same steps as the Windows installer in Section A.1.
 ---
 
 ### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/linux/linux-original.svg" width="40" /> A.3 — Linux (Ubuntu / Debian)
-
-**Step 1:** Add the official PostgreSQL repository:
-
-```bash
-sudo apt install -y curl ca-certificates
-sudo install -d /usr/share/postgresql-common/pgdg
-sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail \
-    https://www.postgresql.org/media/keys/ACCC4CF8.asc
-sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-    https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-    > /etc/apt/sources.list.d/pgdg.list'
-```
-
-**Step 2:** Install PostgreSQL:
-
-```bash
-sudo apt update
-sudo apt install -y postgresql postgresql-contrib
-```
-
-**Step 3:** Start and enable the service:
-
-```bash
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
-
-**Step 4:** Verify:
-
-```bash
-psql --version
-sudo systemctl status postgresql
-```
-
-**Step 5:** Connect using the default system account:
-
-```bash
-sudo -i -u postgres
-psql
-```
-
-You should see the `postgres=#` prompt. Type `\q` to exit.
-
----
-
-## Method B — PostgreSQL Inside a Linux Virtual Machine
-
-This section teaches you how real-world database servers are deployed and administered. We will:
-
-1. Create a Host-Only network in VirtualBox (so your laptop can always reach the VM)
-2. Create a Virtual Machine (VM) with two network adapters
-3. Install Ubuntu Server 26.04 LTS inside the VM
-4. Install and configure PostgreSQL on the Ubuntu Server
-5. SSH into the server from your laptop
-6. Connect to PostgreSQL from pgAdmin running on your laptop
-
-> **Why Ubuntu Server and not Ubuntu Desktop?** Production database servers do not have a graphical desktop. They are administered entirely through the command line. Being comfortable with the Linux command line interface early will serve you well in an IT infrastructure or System Administration role.
-
----
-
-### B.1 — Download the Required Software
-
-**Step 1:** Download the Ubuntu Server 26.04 LTS ISO.
-
-Navigate to: [https://ubuntu.com/download/server](https://ubuntu.com/download/server)
-
-Download the **Ubuntu Server 26.04 LTS** ISO file. It is approximately 3 GB.
-
-**Step 2:** Download and install VirtualBox which is a Type II hypervisor
-
-Navigate to: [https://www.virtualbox.org/wiki/Downloads](https://www.virtualbox.org/wiki/Downloads)
-
-Download the installer for your operating system (**Windows hosts**, **macOS hosts**, or **Linux hosts**) and install it.
-
-Also download the **VirtualBox Extension Pack** from the same page.
-
-**Step 3:** Install the VirtualBox Extension Pack after installing VirtualBox.
-
-Open VirtualBox. In the menu, go to **File → Tools → Extension Pack Manager** (on macOS: **VirtualBox → Preferences → Extensions**). Click the **Install** (➕) button, select the Extension Pack file you downloaded, and follow the prompts.
-
----
-
-### B.2 — Create the Host-Only Network
-
-A **Host-Only network** is a private network that exists only between your laptop (the host) and your virtual machines. It does not depend on the university's WiFi unlike a Bridged adapter, so it is more reliable for SSH and database connections. It also provides a layer of isolation — the VM is not directly exposed to the university network.
-
-**Step 1:** In VirtualBox, open the Network Manager.
-
-- **Windows / Linux:** Go to **File → Tools → Network Manager**
-- **macOS:** Go to **VirtualBox → Tools → Network Manager**
-
-**Step 2:** Click the **Host-only Networks** tab.
-
-**Step 3:** Click the **Create** button (➕). VirtualBox will automatically create a network named:
-
-- `vboxnet0` on macOS and Linux
-- `VirtualBox Host-Only Ethernet Adapter` on Windows
-
-**Step 4:** Select the newly created network and click the **Properties** icon.
-
-Confirm the settings are as follows (these are the VirtualBox defaults):
-
-| Setting | Value |
-| --------- | ------- |
-| IPv4 Address | `192.168.56.1` |
-| IPv4 Network Mask | `255.255.255.0` |
-| DHCP Server | Enabled |
-| DHCP Server Address | `192.168.56.100` |
-| Lower Address Bound | `192.168.56.101` |
-| Upper Address Bound | `192.168.56.254` |
-
-> This means your laptop's address on this private network is `192.168.56.1`. The VM will automatically receive an address between `192.168.56.101` and `192.168.56.254`. You will use that address later to SSH into the VM and to connect from pgAdmin.
-
-Click **Apply** and close the Network Manager.
-
----
-
-### B.3 — Create the Virtual Machine
-
-**Step 1:** In VirtualBox, click **New** (or go to **Machine → New**).
-
-**Step 2:** In the **Name and Operating System** section:
-
-| Setting | Value |
-| --------- | ------- |
-| Name | `ubuntu-26-04-server` |
-| VM Folder | (accept default) |
-| ISO Image | Browse and select the Ubuntu Server 26.04 LTS ISO you downloaded |
-| OS Type | Linux |
-| OS Version | Ubuntu (64-bit) |
-
-Ensure **"Proceed with Unattended Installation"** is **NOT** checked. You will perform the installation steps manually so that you learn how Ubuntu Server is set up.
-
-**Step 3:** In the **Hardware** section:
-
-| Setting | Value |
-| --------- | ------- |
-| Base Memory | `2048 MB` minimum; `4096 MB` if your laptop has 16 GB or more of RAM |
-| Number of CPUs | `1` minimum; `2` if your laptop has sufficient resources |
-
-**Step 4:** In the **Hard Disk** section:
-
-| Setting | Value |
-| --------- | ------- |
-| Disk Size | `25 GB` |
-| Pre-allocate Full Size | Leave unchecked so that it is dynamically allocated |
-
-**Step 5:** Click **Finish**. Do **not** start the VM yet.
-
----
-
-### B.4 — Configure the Two Network Adapters
-
-| Adapter   | Type      | Purpose                                                                 |
-|-----------|-----------|-------------------------------------------------------------------------|
-| Adapter 1 | NAT       | Internet access — so the VM can download software                       |
-| Adapter 2 | Host-Only | Private connection to your laptop — used for SSH and database access    |
-
-With your VM selected in the left panel, click **Settings (Expert) → Network**.
-
-**Adapter 1 tab:**
-
-- Ensure **"Enable Network Adapter"** is checked.
-- Set **"Attached to"** to **NAT**.
-- Click on Port Forwarding and add a new rule:
-  - Name: `SSH`
-  - Protocol: `TCP`
-  - Host IP: `127.0.0.1`
-  - Host Port: `2222`
-  - Guest IP: *leave it blank*
-  - Guest Port: `22`
-
-**Adapter 2 tab:**
-
-- Check **"Enable Network Adapter"**.
-- Set **"Attached to"** to **Host-only Adapter**.
-- Set **"Name"** to the Host-Only network you created: `vboxnet0` (macOS/Linux) or `VirtualBox Host-Only Ethernet Adapter` (Windows).
-
-Click **OK** to save.
-
----
-
-### B.5 — Install Ubuntu Server
-
-**Step 1:** Start the VM by double-clicking it or clicking **Start**.
-
-The VM will boot from the Ubuntu Server ISO. You should see the Ubuntu installer screen. Select **"Try or install Ubuntu Server"** and press Enter.
-
-**Step 2:** Work through the installer screens as follows.
-
-**Language:** Select **English** and press Enter.
-
-**Keyboard layout:** Select the default (**English (US)** for most Hosts) and press Enter.
-
-**Choose type of installation:** Select **Install Ubuntu Server** and press Enter.
-
-**Network connections:** You should see two network interfaces listed:
-
-- `enp0s3` — your NAT adapter (should already have an IP starting with `10.0.2.x`)
-- `enp0s8` — your Host-Only adapter (may show as "not connected" at this stage; but it may eventually get an IP in the `192.168.56.x` range from the DHCP server you set up in Section B.2)
-
-**Proxy address:** Leave blank and press Enter.
-
-**Ubuntu server mirror location:** It should successfully detect the mirror (the server where updates are downloaded from) based on your network. Press Enter to accept the default.
-
-**Storage layout:** Select **"Use an entire disk"**. Accept the default disk. On the confirmation screen (Confirm destructive action), select **Continue**.
-
-**Profile setup:** This is important. Enter the following:
-
-| Field | Value |
-| ------- | ------- |
-| Your name | `student` |
-| Your server's name | `classlab` |
-| Username | `student` |
-| Password | `student` |
-
-> Do not use `student` as your password in a production environment.
-
-**Upgrade to Ubuntu Pro?** Select **No**.
-
-**Featured server snaps:** Do not select anything because you will perform most of the installations manually. Press **Done**.
-
-**Step 3:** Wait for the installation to complete. This takes 10–15 minutes depending on your laptop's speed. When you see **"Installation complete!"**, select **"Reboot Now"**.
-
-**Step 4:** After the reboot, you will be prompted to remove the installation medium. It is removed automatically. Press **Enter**. The VM will boot into the installed Ubuntu Server.
-
-**Step 5:** Log in with the username `student` and the password you set.
-
----
-
-### B.6 — Verify and Configure the Network Interfaces
-
-After logging in, confirm that both network adapters are active.
-
-**Step 1:** Check the network interfaces:
-
-Next, find the IP address of your VM. This requires you to have `net-tools` installed first:
-
-```bash
-sudo apt install net-tools
-```
-
-Then execute:
-
-```bash
-ip addr show
-```
-
-You should see three interfaces:
-
-```bash
-1: lo         — the loopback interface (127.0.0.1) — always present
-2: enp0s3     — NAT adapter — should have an address like 10.0.2.x
-3: enp0s8     — Host-Only adapter — should have an address like 192.168.56.x
-```
-
-Note the IP address assigned to `enp0s8`. This is the address you will use for SSH and for pgAdmin. **Write it down.**
-
-You can update the **port forwarding** rule you created in Section B.4 to use this IP address instead of leaving it blank.
-
-- Go to Machine > Settings (Expert) > Network > Adapter 1 (Attached to NAT) > Port Forwarding and add a new rule:
-  - Name: `SSH`
-  - Protocol: `TCP`
-  - Host IP: `127.0.0.1`
-  - Host Port: `2222`
-  - Guest IP: *leave it blank*
-  - Guest Port: `22`
-
-> If `enp0s8` does not have an IP address, proceed to Step 2. Otherwise, skip to Section B.7.
-
-**Step 2 (only if `enp0s8` has no IP):** Configure the Host-Only adapter manually using netplan.
-
-Open the netplan configuration file:
-
-```bash
-sudo nano /etc/netplan/50-cloud-init.yaml
-```
-
-The file will look similar to this (the exact contents may vary):
-
-```yaml
-network:
-  version: 2
-  ethernets:
-    enp0s3:
-      dhcp4: true
-```
-
-Edit it to add the second interface:
-
-```yaml
-network:
-  version: 2
-  ethernets:
-    enp0s3:
-      dhcp4: true
-    enp0s8:
-      dhcp4: true
-```
-
-> **How to use nano:** Use the arrow keys to move the cursor. Type to insert text. When you are done, press `Ctrl+O` to save (then press Enter to confirm the filename), and `Ctrl+X` to exit.
-
-Apply the configuration:
-
-```bash
-sudo netplan apply
-```
-
-Check again:
-
-```bash
-ip addr show enp0s8
-```
-
-You should now see an IP address in the `192.168.56.x` range.
-
----
-
-### B.7 — Install VirtualBox Guest Additions
-
-Guest Additions improve the integration between the VM and your laptop. On a server (no graphical desktop), Guest Additions provide shared folders and improved performance.
-
-```bash
-sudo apt update
-sudo apt install -y virtualbox-guest-utils
-```
-
-Reboot the VM to apply:
-
-```bash
-sudo reboot
-```
-
-Log back in after the reboot.
-
----
-
-### B.8. Install and Configure OpenSSH Server in Ubuntu
-
-**Step 1:** Execute the following commands to install the OpenSSH server:
-
-```bash
-sudo apt update
-sudo apt install openssh-server
-```
-
-**Step 2:** Verify installation:
-
-```bash
-ssh -V
-systemctl status ssh
-```
-
-**Step 3:** Start the SSH server
-
-```bash
-sudo systemctl start ssh
-```
-
-Set the SSH server to start automatically on boot
-
-```bash
-sudo systemctl enable ssh
-```
-
-**Step 4:** Add a firewall rule for SSH access
-
-Allow SSH traffic to pass through the **UFW (Uncomplicated Firewall)** - the default for UFW is to **deny all**, then explicitly allow
-
-Add the firewall rule to allow access through port 22 by executing:
-
-```bash
-sudo ufw allow ssh
-```
-
-Enable the firewall:
-
-```bash
-sudo ufw enable
-```
-
-Confirm that the firewall has been enabled:
-
-```bash
-sudo ufw status verbose
-```
-
-Confirm you can see `22/tcp ALLOW IN Anywhere` in the output.
-
-**Step 5:** **Harden** SSH access
-
-```bash
-sudo vim /etc/ssh/sshd_config
-```
-
-Then add the following under the **Authentication** section:  
-`PermitRootLogin no`
-
-To edit content in `vim`, press `i` to enter insert mode, make your changes, then press `Esc` to exit insert mode, and type `:wq` to save and quit.
-
-> **Why disable root login?** Any server exposed to the internet will receive thousands of automated login attempts targeting the `root` user. Disabling it means attackers cannot use the most privileged account even if they guess its password.
-
-Then restart the SSH service to apply the changes:
-
-```bash
-sudo systemctl restart ssh
-```
-
-### B.9 — SSH into the VM from Your Laptop
-
-Execute:
-
-```bash
-ip addr show
-```
-
-Note the IP address assigned to the `enp0s8` interface. `enp0s8` stands for Ethernet adapter located on PCI bus 0, slot 8.
-
-Below is an example of the output you should see:
-
-```text
-student@classlab:~$ ip addr show
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host noprefixroute 
-       valid_lft forever preferred_lft forever
-2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-    link/ether 08:00:27:8a:c1:6f brd ff:ff:ff:ff:ff:ff
-    altname enx0800278ac16f
-    inet 10.0.2.15/24 metric 100 brd 10.0.2.255 scope global dynamic enp0s3
-       valid_lft 81403sec preferred_lft 81403sec
-    inet6 fd17:625c:f037:2:a00:27ff:fe8a:c16f/64 scope global dynamic mngtmpaddr noprefixroute 
-       valid_lft 86112sec preferred_lft 14112sec
-    inet6 fe80::a00:27ff:fe8a:c16f/64 scope link proto kernel_ll 
-       valid_lft forever preferred_lft forever
-3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-    link/ether 08:00:27:b8:27:f7 brd ff:ff:ff:ff:ff:ff
-    altname enx080027b827f7
-    inet 192.168.56.103/24 metric 100 brd 192.168.56.255 scope global dynamic enp0s8
-       valid_lft 489sec preferred_lft 489sec
-    inet6 fe80::a00:27ff:feb8:27f7/64 scope link proto kernel_ll 
-       valid_lft forever preferred_lft forever
-```
-
-In this example, the IP address of the VM is `192.168.56.103`. **Replace this with the actual IP address of your VM when executing the following commands.**
-
-Ping the VM from your host machine to confirm connectivity:
-
-```bash
-ping 192.168.56.103
-```
-
-This is the **Host-Only Adapter** which is used by the host to access the VM. Remember that we had also set port forwarding in Adapter 1 which was using NAT.
-
-The port forwarding means that if we access `localhost` port `2222`, it is forwarded to the VM (`192.168.56.103`) via the VM's port `22`.
-
-You will now leave the VM window and control the server entirely from your laptop's terminal or an application like PuTTY ([https://putty.org/index.html](https://putty.org/index.html)). This is how production servers are administered.
-
-You can now SSH into your VM from your host machine using the host has `localhost` and the port as `2222`:
-
-```bash
-ssh -p 2222 student@localhost
-```
-
-This is executed from your host machine's terminal. Use the **Git Bash** terminal if you are on Windows and the default terminal if you are on Linux or macOS.
-
-You will be prompted to enter the password for the `student` user, which you set during the Ubuntu Server installation.
-
-You will see a message like:
-
-```text
-The authenticity of host 'localhost' cannot be established.
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
-```
-
-Type `yes` and press Enter. This is normal on the first connection — SSH is recording the server's identity so it can detect if it changes in future.
-
-Enter your password when prompted.
-
-You should now see:
-
-```bash
-student@classlab:~$
-```
-
-Alternatively, you can use the VM's Host-Only IP address directly from the host machine:
-
-```bash
-ssh -p 22 student@192.168.56.103
-```
-
-This bypasses the port forwarding and connects directly to the VM's SSH server on port 22. However, this can only be done from the host machine, not from another machine on the university network or business' network, because the Host-Only network is private between the host (your laptop) and the VM.
-
-**You are now logged into your Ubuntu Server remotely.** From this point on, all commands in Sections B.10 onwards are typed in this SSH terminal, not in the VM window itself.
-
-> You can now minimize the VirtualBox VM window. You do not need to interact with it directly again.
-
----
-
-### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original-wordmark.svg" width="160" align="left"/> <br/>B.10 — Install PostgreSQL on Ubuntu Server
 
 The following relies on the installation instructions provided by the vendor here: [https://www.postgresql.org/download/linux/ubuntu/](https://www.postgresql.org/download/linux/ubuntu/).
 
@@ -679,6 +177,551 @@ Replace `your_password_here` with a strong password. Do not forget it.
 
 ---
 
+## Method B — PostgreSQL Inside a Linux Virtual Machine
+
+This section teaches you how real-world database servers are deployed and administered. We will:
+
+1. Create a Host-Only network in VirtualBox (so your laptop can always reach the VM)
+2. Create a Virtual Machine (VM) with two network adapters
+3. Install Ubuntu Server 26.04 LTS inside the VM
+4. Install and configure PostgreSQL on the Ubuntu Server
+5. SSH into the server from your laptop
+6. Connect to PostgreSQL from pgAdmin running on your laptop
+
+> **Why Ubuntu Server and not Ubuntu Desktop?** Production database servers do not have a graphical desktop. They are administered entirely through the command line. Being comfortable with the Linux command line interface early will serve you well in an IT infrastructure or System Administration role.
+
+---
+
+### B.1 — Download the Required Software
+
+**Step 1:** Download the Ubuntu Server 26.04 LTS ISO (**NOT** Ubuntu Desktop)
+
+Navigate to: [https://ubuntu.com/download/server](https://ubuntu.com/download/server)
+
+Download the **Ubuntu Server 26.04 LTS** ISO file. It is approximately 3 GB.
+
+**Step 2:** Download and install VirtualBox which is a Type II hypervisor
+
+Navigate to: [https://www.virtualbox.org/wiki/Downloads](https://www.virtualbox.org/wiki/Downloads)
+
+Download the installer for your operating system (**Windows hosts**, **macOS hosts**, or **Linux hosts**) and install it.
+
+Also download the **VirtualBox Extension Pack** from the same page.
+
+**Step 3:** Install the VirtualBox Extension Pack after installing VirtualBox.
+
+Open VirtualBox. In the menu, go to **File → Tools → Extension Pack Manager** (on macOS: **VirtualBox → Preferences → Extensions**). Click the **Install** (➕) button, select the Extension Pack file you downloaded, and follow the prompts.
+
+---
+
+### B.2 — Create the Host-Only Network
+
+A **Host-Only network** is a private network that exists only between your laptop (the host) and your virtual machines. It does not depend on the university's WiFi unlike a Bridged adapter, so it is more reliable for SSH and database connections. It also provides a layer of isolation — the VM is not directly exposed to the university network.
+
+**Step 1:** In VirtualBox, open the Network Manager.
+
+- **Windows / Linux:** Go to **File → Tools → Network**
+- **macOS:** Go to **VirtualBox → Tools → Network**
+
+**Step 2:** Click the **Host-only Networks** tab.
+
+**Step 3:** Click the **Create** button (➕). VirtualBox will automatically create a network named:
+
+- `VirtualBox Host-Only Ethernet Adapter` on Windows
+- `vboxnet0` on macOS and Linux
+
+**Step 4:** Select the newly created network and click the **Properties** icon.
+
+Confirm the settings are as follows (these are the VirtualBox defaults):
+
+| Setting | Value |
+| --------- | ------- |
+| IPv4 Address | `192.168.56.1` |
+| IPv4 Network Mask | `255.255.255.0` |
+| DHCP Server | Enabled |
+| DHCP Server Address | `192.168.56.100` |
+| Lower Address Bound | `192.168.56.101` |
+| Upper Address Bound | `192.168.56.254` |
+
+> In this example, this means your laptop's address on this private network is `192.168.56.1`. The VM will automatically receive an address between `192.168.56.101` and `192.168.56.254`. You will use that address later to SSH into the VM and to connect from pgAdmin.
+
+Click **Apply** and close the Network Manager.
+
+---
+
+### B.3 — Create the Virtual Machine
+
+**Step 1:** In VirtualBox, click **New** (or go to **Machine → New**).
+
+**Step 2:** In the **Name and Operating System** section:
+
+| Setting | Value |
+| --------- | ------- |
+| Name | `ubuntu-26-04-server` |
+| VM Folder | (accept default) |
+| ISO Image | Browse and select the Ubuntu Server 26.04 LTS ISO you downloaded |
+| OS Type | Linux |
+| OS Distribution | Ubuntu |
+| OS Version | Ubuntu (64-bit) |
+
+Ensure **"Proceed with Unattended Installation"** is **NOT** checked. You will perform the installation steps manually so that you learn how Ubuntu Server is set up.
+
+**Step 3:** In the **Specify virtual hardware** section:
+
+| Setting | Value |
+| --------- | ------- |
+| Base Memory | `2048 MB` minimum; `4096 MB` if your laptop has 16 GB or more of RAM |
+| Number of CPUs | `1` minimum; `2` if your laptop has sufficient resources |
+
+**Step 4:** In the **Specify virtual hard disk** section:
+
+| Setting | Value |
+| --------- | ------- |
+| Disk Size | `25 GB` |
+| Pre-allocate Full Size | Leave **unchecked** so that it is dynamically allocated |
+
+**Step 5:** Click **Finish**. **Do NOT** start the VM yet.
+
+---
+
+### B.4 — Configure the Two Network Adapters
+
+| Adapter   | Type      | Purpose                                                                 |
+|-----------|-----------|-------------------------------------------------------------------------|
+| Adapter 1 | NAT       | Internet access — so the VM can download software                       |
+| Adapter 2 | Host-Only | Private connection to your laptop — used for SSH and database access    |
+
+With your VM selected in the left panel, click **Settings (Expert) → Network**.
+
+**Adapter 1 tab:**
+
+- Ensure **"Enable Network Adapter"** is checked.
+- Set **"Attached to"** to **NAT**.
+- Click on Port Forwarding and add a new rule:
+  - Name: `SSH`
+  - Protocol: `TCP`
+  - Host IP: `127.0.0.1`
+  - Host Port: `2222`
+  - Guest IP: *leave it blank*
+  - Guest Port: `22`
+
+**Adapter 2 tab:**
+
+- Check **"Enable Network Adapter"**.
+- Set **"Attached to"** to **Host-only Adapter**.
+- Set **"Name"** to the Host-Only network you created: `vboxnet0` (macOS/Linux) or `VirtualBox Host-Only Ethernet Adapter` (Windows).
+
+Click **OK** to save.
+
+---
+
+### B.5 — Install Ubuntu Server
+
+**Step 1:** Start the VM by double-clicking it or clicking **Start**.
+
+The VM will boot from the Ubuntu Server ISO. You should see the Ubuntu installer screen. Select **"Try or install Ubuntu Server"** and press Enter.
+
+**Step 2:** Work through the installer screens as follows.
+
+**Language:** Select **English** and press Enter.
+
+**Keyboard layout:** Select the default (**English (US)** for most Hosts) and press Enter.
+
+**Choose type of installation:** Select **Install Ubuntu Server** and press Enter.
+
+**Network connections:** You should see two network interfaces listed:
+
+- `enp0s3` — your NAT adapter (should already have an IP starting with `10.0.2.x`)
+- `enp0s8` — your Host-Only adapter (may show as "not connected" at this stage; but it should eventually get an IP in the `192.168.56.x` range from the DHCP server you set up in Section B.2)
+
+**Proxy address:** Leave blank and press Enter.
+
+**Ubuntu server mirror location:** It should successfully detect the mirror (the geographically nearest server where updates are downloaded from) based on your network. Press Enter to accept the default.
+
+**Storage layout:** Select **"Use an entire disk"**. Accept the default disk. On the confirmation screen (Confirm destructive action), select **Continue**.
+
+**Profile setup:** This is important. Enter the following:
+
+| Field | Value |
+| ------- | ------- |
+| Your name | `student` |
+| Your server's name | `classlab` |
+| Username | `student` |
+| Password | `student` |
+
+> Do not use `student` as your password in a production environment.
+
+**Upgrade to Ubuntu Pro?** Select **No**.
+
+**Install OpenSSH server?** Do not **Install OpenSSH server** at this point. We will install and configure it manually later so that you learn the technical details.
+
+**Featured server snaps:** Do not select anything because you will perform most of the installations manually. Press **Done**.
+
+**Step 3:** Wait for the installation to complete. This takes 10–15 minutes depending on your laptop's speed. When you see **"Installation complete!"**, select **"Reboot Now"**.
+
+**Step 4:** After the reboot, you will be prompted to remove the installation medium. It is removed automatically. Press **Enter**. The VM will boot into the installed Ubuntu Server.
+
+**Step 5:** Log in with the username `student` and the password you set.
+
+---
+
+### B.6 — Verify and Configure the Network Interfaces
+
+After logging in, confirm that both network adapters are active.
+
+**Step 1:** Check the network interfaces:
+
+Next, find the IP address of your VM. This requires you to have `net-tools` installed first:
+
+```bash
+sudo apt install net-tools
+```
+
+Then execute:
+
+```bash
+ip addr show
+```
+
+You should see three interfaces:
+
+```bash
+1: lo         — the loopback interface (127.0.0.1) — always present
+2: enp0s3     — NAT adapter — should have an address like 10.0.2.x
+3: enp0s8     — Host-Only adapter — should have an address like 192.168.56.x
+```
+
+Note the IP address assigned to `enp0s8`. This is the address you will use for SSH and for pgAdmin. **Write it down.**
+
+You can update the **port forwarding** rule you created in Section B.4 to use this IP address instead of leaving it blank.
+
+- Go to Machine > Settings (Expert) > Network > Adapter 1 (Attached to NAT) > Port Forwarding and add a new rule:
+  - Name: `SSH`
+  - Protocol: `TCP`
+  - Host IP: `127.0.0.1`
+  - Host Port: `2222`
+  - Guest IP: Use the IP address of `enp0s8` you just noted down
+  - Guest Port: `22`
+
+> If `enp0s8` does not have an IP address, proceed to Step 2. Otherwise, skip to Section B.7.
+
+**Step 2 (only if `enp0s8` has no IP):** Configure the Host-Only adapter manually using netplan.
+
+Open the netplan configuration file:
+
+```bash
+sudo nano /etc/netplan/00-installer-config.yaml
+```
+
+The file will look similar to this (the exact contents may vary):
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp0s3:
+      dhcp4: true
+```
+
+Edit it to add the second interface:
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    enp0s3:
+      dhcp4: true
+    enp0s8:
+      dhcp4: true
+```
+
+> **How to use nano:** Use the arrow keys to move the cursor. Type to insert text. When you are done, press `Ctrl+O` to save (then press Enter to confirm the filename), and `Ctrl+X` to exit.
+
+Apply the configuration:
+
+```bash
+sudo netplan apply
+```
+
+Check again:
+
+```bash
+ip addr show enp0s8
+```
+
+You should now see an IP address in the `192.168.56.x` range.
+
+---
+
+### B.7 — Install VirtualBox Guest Additions
+
+Guest Additions improve the integration between the VM and your laptop. On a server (no graphical desktop), Guest Additions provide shared folders and better network performance.
+
+```bash
+sudo apt update
+sudo apt install -y virtualbox-guest-utils
+```
+
+Reboot the VM to apply:
+
+```bash
+sudo reboot
+```
+
+Log back in after the reboot.
+
+---
+
+### B.8. Install and Configure OpenSSH Server in Ubuntu
+
+**Step 1:** Execute the following commands to install the OpenSSH server:
+
+```bash
+sudo apt update
+sudo apt install openssh-server
+```
+
+**Step 2:** Verify installation:
+
+`systemctl` is a Linux command used to control and manage services and the system state on systems that use `systemd` (which is the standard system manager in most modern Linux distributions such as Ubuntu and Debian).
+
+Think of it as *"the remote control for background services in Linux"*.
+
+A good mental model is this:
+
+- `systemd` → the manager/boss of the system
+- `systemctl` → the command you use to talk to that manager
+
+```bash
+ssh -V
+systemctl status ssh
+```
+
+**Step 3:** Start the SSH server
+
+```bash
+sudo systemctl start ssh
+```
+
+Set the SSH server to start automatically on boot
+
+```bash
+sudo systemctl enable ssh
+```
+
+**Step 4:** Add a firewall rule for SSH access
+
+Allow SSH traffic to pass through the **UFW (Uncomplicated Firewall)** - the default for UFW is to **deny all**, then explicitly allow
+
+Add the firewall rule to allow access through port 22 by executing:
+
+```bash
+sudo ufw allow from 192.168.56.0/24 to any port 22 proto tcp
+```
+
+This enables SSH access from any machine on the `192.168.56.x` network, which includes the host (your laptop) and any other VMs you create on the same Host-Only network.
+
+It is better than `sudo ufw allow 22/tcp` because it restricts access to only machines on the private network, rather than allowing any machine on the university network to attempt a connection.
+
+Enable the firewall:
+
+```bash
+sudo ufw enable
+```
+
+Confirm that the firewall has been enabled:
+
+```bash
+sudo ufw status verbose
+```
+
+Confirm you can see `22/tcp ALLOW IN 192.168.56.0/24` in the output.
+
+**Step 5:** **Harden** SSH access
+
+```bash
+sudo vim /etc/ssh/sshd_config
+```
+
+Search for the line `#PermitRootLogin prohibit-password` by typing `/PermitRootLogin` and pressing Enter.
+
+Then add the following under the **Authentication** section:  
+`PermitRootLogin no`
+
+To edit content in `vim`, press `i` to enter insert mode, make your changes, then press `Esc` to exit insert mode, and type `:wq` to save and quit.
+
+> **Why disable root login?** Any server exposed to the internet will receive thousands of automated login attempts targeting the `root` user. Disabling it means attackers cannot use the most privileged account even if they guess its password.
+
+Then restart the SSH service to apply the changes:
+
+```bash
+sudo systemctl restart ssh
+```
+
+### B.9 — SSH into the VM from Your Laptop
+
+Execute:
+
+```bash
+ip addr show
+```
+
+Note the IP address assigned to the `enp0s8` interface. `enp0s8` stands for Ethernet adapter located on PCI bus 0, slot 8.
+
+Below is an example of the output you should see:
+
+```text
+student@classlab:~$ ip addr show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host noprefixroute 
+       valid_lft forever preferred_lft forever
+2: enp0s3: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:8a:c1:6f brd ff:ff:ff:ff:ff:ff
+    altname enx0800278ac16f
+    inet 10.0.2.15/24 metric 100 brd 10.0.2.255 scope global dynamic enp0s3
+       valid_lft 81403sec preferred_lft 81403sec
+    inet6 fd17:625c:f037:2:a00:27ff:fe8a:c16f/64 scope global dynamic mngtmpaddr noprefixroute 
+       valid_lft 86112sec preferred_lft 14112sec
+    inet6 fe80::a00:27ff:fe8a:c16f/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+3: enp0s8: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    link/ether 08:00:27:b8:27:f7 brd ff:ff:ff:ff:ff:ff
+    altname enx080027b827f7
+    inet 192.168.56.103/24 metric 100 brd 192.168.56.255 scope global dynamic enp0s8
+       valid_lft 489sec preferred_lft 489sec
+    inet6 fe80::a00:27ff:feb8:27f7/64 scope link proto kernel_ll 
+       valid_lft forever preferred_lft forever
+```
+
+In this example, the IP address of the VM is `192.168.56.103`. **Replace this with the actual IP address of your VM when executing the following commands.**
+
+Ping the VM **from your host machine** to confirm connectivity:
+
+```bash
+ping 192.168.56.103
+```
+
+This is the **Host-Only Adapter** which is used by the host to access the VM. Remember that we had also set port forwarding in Adapter 1 which was using NAT.
+
+You will now leave the VM window and control the server entirely from your laptop's terminal or an application like PuTTY ([https://putty.org/index.html](https://putty.org/index.html)) or Termius ([https://termius.com/download/](https://termius.com/download/)). This is how production servers are administered.
+
+An alternative is to use port forwarding, which means that if we access `localhost` port `2222`, it is forwarded to the VM's `SSH port 22`.
+
+For example:
+
+```bash
+ssh -p 2222 student@localhost
+```
+
+Alternatively, you can use the VM's Host-Only IP address directly from the host machine. For example, assuming the VM's Host-Only IP address is `192.168.56.103`:
+
+```bash
+ssh -p 22 student@192.168.56.103
+```
+
+Replace `192.168.56.103` with the actual IP address of your VM in the host-only network.
+
+This bypasses the port forwarding and connects directly to the VM's SSH server on port 22.
+
+However, this can only be done from the host machine, not from another machine on the university network or business' network, because the Host-Only network is private between the host (your laptop) and the VM.
+
+This is executed from your host machine's terminal. Use the **Git Bash** terminal if you are on Windows and the default terminal if you are on Linux or macOS.
+
+You will be prompted to enter the password for the `student` user, which you set during the Ubuntu Server installation.
+
+You will see a message like:
+
+```text
+The authenticity of host '192.168.56.104 (192.168.56.104)' can't be established.
+
+ED25519 key fingerprint is: 
+
+This key is not known by any other names.
+
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+Type `yes` and press Enter. This is normal on the first connection — SSH is recording the server's identity so it can detect if it changes in future.
+
+Enter your password when prompted.
+
+You should now see:
+
+```bash
+student@classlab:~$
+```
+
+**You are now logged into your Ubuntu Server remotely.** From this point on, all commands in Sections B.10 onwards are typed in this SSH terminal, not in the VM window itself.
+
+> You can now minimize the VirtualBox VM window. You do not need to interact with it directly again.
+
+---
+
+### <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original-wordmark.svg" width="160" align="left"/> <br/>B.10 — Install PostgreSQL on Ubuntu Server
+
+The following relies on the installation instructions provided by the vendor here: [https://www.postgresql.org/download/linux/ubuntu/](https://www.postgresql.org/download/linux/ubuntu/).
+
+This is the standard procedure when installing services on a Linux server. You **should** rely on the vendor's documentation to ensure you are installing the software correctly and securely.
+
+**Step 1:** Add the official PostgreSQL APT repository.
+
+Using the official repository ensures you get the latest stable version of PostgreSQL rather than the version packaged with Ubuntu.
+
+```bash
+sudo apt install -y postgresql-common
+sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
+```
+
+**Step 2:** Install PostgreSQL:
+
+```bash
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+```
+
+**Step 3:** Start and enable the service:
+
+```bash
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+**Step 4:** Verify the installation:
+
+```bash
+psql --version
+sudo systemctl status postgresql
+
+# or for a more thorough verification:
+sudo systemctl status postgresql*
+```
+
+You should see `Active: active (running)` or `Active: active (exited)`.
+
+**Step 5:** Set a password for the `postgres` superuser.
+
+The `postgres` user is the default PostgreSQL superuser. By default, it has no password and can only be accessed from the server itself using peer authentication (i.e., you must be logged in as the Linux `postgres` system user).
+
+```bash
+sudo -u postgres psql
+```
+
+Inside the `psql` prompt:
+
+```sql
+ALTER USER postgres WITH ENCRYPTED PASSWORD 'your_password_here';
+\q
+```
+
+Replace `your_password_here` with a strong password. Do not forget it. We use `postgres` in the case of this lab in a learning environment. You would use a more secure password in production.
+
+> **`sudo -u postgres`** means: run the following command as the Linux user named `postgres`. This is a standard Linux technique for switching to a specific user. The `postgres` system user was created automatically when PostgreSQL was installed.
+
+---
+
 ### B.11 — Open the Firewall for PostgreSQL
 
 Add a firewall rule to allow database connections on port 5432:
@@ -698,10 +741,9 @@ New profiles: skip
 
 To                         Action      From
 --                         ------      ----
-22/tcp                     ALLOW IN    Anywhere                  
+22/tcp                     ALLOW IN    192.168.56.0/24           
 5432/tcp                   ALLOW IN    Anywhere                  
-22/tcp (v6)                ALLOW IN    Anywhere (v6)             
-5432/tcp (v6)              ALLOW IN    Anywhere (v6)
+5432/tcp (v6)              ALLOW IN    Anywhere (v6) 
 ```
 
 #### Production Environment Considerations
@@ -727,7 +769,9 @@ Meaning:
 
 Therefore, this rule reads as: **"Allow TCP traffic arriving from 192.168.56.10, destined for any local network interface destined for port 5432 on this server, and deny everything else."**
 
-Any other machine that attempts a connection on port 5432 — including an attacker who has gained access to the network — will be silently dropped by the firewall before it even reaches PostgreSQL.
+Any other machine that attempts a connection on port 5432 — including an attacker who has gained access to the network — will be silently dropped by the firewall before it even reaches PostgreSQL. This is referred to as limiting the **blast radius** of a service. The smaller the blast radius, the better.
+
+Further reading: [https://en.wikipedia.org/wiki/Blast_radius](https://en.wikipedia.org/wiki/Blast_radius)
 
 The resulting ufw status output would look like this:
 
@@ -790,9 +834,8 @@ New profiles: skip
 
 To                         Action      From
 --                         ------      ----
-22/tcp                     ALLOW IN    Anywhere                  
-5432/tcp                   ALLOW IN    192.168.56.0/24           
-22/tcp (v6)                ALLOW IN    Anywhere (v6) 
+22/tcp                     ALLOW IN    192.168.56.0/24           
+5432/tcp                   ALLOW IN    192.168.56.0/24
 ```
 
 ---
@@ -852,7 +895,7 @@ This means: "Allow any user to connect to any database, from any IP address in t
 Press `Esc`, then type `:wq` and press Enter to save and quit.
 
 > Why **192.168.56.0/24** and not **0.0.0.0/0** (all addresses)?  
-> Restricting access to the Host-Only subnet means the database is only reachable from your laptop — not from the internet or other networks. This is a basic security principle: restrict access to what is actually needed. In production, you would restrict to specific trusted IP addresses.
+> Restricting access to the Host-Only subnet means the database is only reachable from your laptop — not from the Internet or other networks. This is a basic security principle: restrict access to what is actually needed. In production, you would restrict to specific trusted IP addresses.
 
 **Step 4:** Restart PostgreSQL to apply the configuration changes:
 
@@ -863,10 +906,10 @@ sudo systemctl restart postgresql
 **Step 5** — Verify that the service restarted cleanly without errors:
 
 ```bash
-sudo systemctl status postgresql
+sudo systemctl status postgresql*
 ```
 
-You should see `Active: active (running)`. If you see `failed` or `inactive`, there is a syntax error in one of the two configuration files you edited. The error message will indicate which file and which line number. Fix the error and restart again.
+You should see `Active: active (running)` or `Active: active (exited)`. If you see `failed` or `inactive`, there is a syntax error in one of the two configuration files you edited. The error message will indicate which file and which line number. Fix the error and restart again.
 
 **Step 6**: Verify that PostgreSQL is now listening on all interfaces:
 
@@ -903,7 +946,7 @@ Before trying to connect from your laptop, confirm the connection works locally:
 psql -U postgres -h localhost
 ```
 
-Enter your password when prompted. You should see:
+Enter your password when prompted, i.e., the password you set in Section B.10, Step 5. You should see:
 
 ```text
 postgres=#
@@ -1256,13 +1299,13 @@ Take a screenshot for each of the following and compile them into a single PDF r
 | 5 | `docker ps` output showing the `postgres-18-container` container running | C |
 | 6 | pgAdmin 4 connected to the Docker PostgreSQL container | C |
 
-Submit the PDF via the course portal by the deadline stated on the Lab Sheet.
+Submit the PDF via the submission link by the deadline stated in class.
 
 ---
 
 ## Troubleshooting
 
-| Problem | Likely Cause | Solution |
+| Common Problems | Likely Cause | Solution |
 | --------- | ------------- | ---------- |
 | VM has no internet access | NAT adapter not configured | In VirtualBox VM Settings → Network → Adapter 1: ensure it is set to NAT |
 | Cannot SSH into the VM — connection refused | SSH service not running, or firewall blocking port 22 | Inside the VM: `sudo systemctl start ssh` and `sudo ufw allow ssh` |
