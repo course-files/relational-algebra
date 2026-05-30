@@ -45,9 +45,11 @@
 │       ├── ERD_of_siwaka_dishes_From_DataGrip.png
 │       ├── ERD_of_siwaka_dishes_From_PGAdmin.png
 │       ├── SystemArchitecture.jpg
-│       ├── TieredArchitecture.png
+│       ├── TieredArchitecture.jpg
 │       ├── images_and_containers.jpg
-│       └── virtualization_and_containerization.png
+│       ├── psql_in_pgadmin.jpg
+│       ├── query_tool_in_pgadmin.jpg
+│       └── virtualization_and_containerization.jpg
 └── data
     └── 202605
         ├── 0_a_DDL_siwaka_dishes_original.sql
@@ -60,7 +62,7 @@
         ├── 6_b_DML_customer_feedback_data.sql
         └── 7_a_DDL_other_DB_objects.sql
 
-5 directories, 23 files
+5 directories, 25 files
 ```
 
 ## Setup Instructions
