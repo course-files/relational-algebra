@@ -26,7 +26,7 @@ Right-Click on the `postgres` database and select `PSQL Tool` to open a new psql
 
 You should see a screen like this:
 
-![PG Admin 4 psql Tool](./assets/images/psql_in_pgadmin.jpg)
+![PG Admin 4 psql Tool](https://raw.githubusercontent.com/course-files/RelationalAlgebra/refs/heads/main/assets/images/psql_in_pgadmin.jpg)
 
 **Step 1** — Use the synthetic data provided in the `data/202605` directory to create a new database and database accounts in PostgreSQL.
 
@@ -1214,6 +1214,14 @@ Find all customers who have ordered **every product in the 'Fried Dishes' catego
 
 ## Lab Deliverable
 
-For each **Exercise** (1 through 18), type the relational algebra expression and the SQL query into the same markdown file, i.e., 2_Relational_Algebra.md, and submit this file as your lab deliverable. Ensure that you have run each SQL query against the database and verified that it returns the expected results.
+For each **exercise** (1 through 18), type the relational algebra expression and the SQL query into the same markdown file, i.e., `2_Relational_Algebra.md`, and submit this file as your lab deliverable. Ensure that you have run each SQL query against the database and verified that it returns the expected results.
+
+---
+
+**Submission Details:**
+
+Student ID: `__________`  
+Student Name: `________________________`  
+Date of Submission: `________________________`
 
 ---
