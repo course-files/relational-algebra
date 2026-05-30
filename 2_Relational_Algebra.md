@@ -14,19 +14,56 @@ For each question, you will:
 
 ---
 
-Connect to PostgreSQL using either pgAdmin 4 or the `psql` command-line tool or DataGrip or DBeaver. We will use **DataGrip** in this lab session.
+You can connect to PostgreSQL using either pgAdmin 4 or the `psql` command-line tool or DataGrip or DBeaver or any other database tool.
+
+We will use pgAdmin 4 in this case.
 
 ## Setting Up the Database
 
+Open the connection to the PostgreSQL DBMS in the VM using pgAdmin. This was created in Part 1 of the lab when we were installing PostgreSQL.
+
+Right-Click on the `postgres` database and select `PSQL Tool` to open a new psql command line interface window.
+
+You should see a screen like this:
+
+![PG Admin 4 psql Tool](./assets/images/psql_in_pgadmin.jpg)
+
 **Step 1** — Use the synthetic data provided in the `data/202605` directory to create a new database and database accounts in PostgreSQL.
 
-Refer to: [data/202605/0_a_DDL_siwaka_dishes_original.sql](data/202605/0_a_DDL_siwaka_dishes_original.sql)
+Refer to: [data/202605/0_a_DDL_siwaka_dishes_original.sql](data/202605/0_a_DDL_siwaka_dishes_original.sql) as the first file.
+
+Copy and paste **line 1 to line 141 only** into the `psql` command line interface and execute them. This will create a new database called `siwaka_dishes`, create the necessary tables, and set up the user accounts.
 
 **Step 2** — Connect to your new database using the `siwaka_dishes_db_admin` account.
 
-**Step 3** — Load the data script
+Once you have created the database and setup the necessary user accounts, connect to the `siwaka_dishes` database using the `siwaka_dishes_db_admin` account. You can do this in pgAdmin by creating a new connection.
+
+Right-click on `Servers` → `Create` → `Server...`
+
+The connection details are as follows:
+
+| Parameter | Value |
+| --- | --- |
+| Name | `siwaka_dishes_db_admin@ubuntu-16-04-VM:5432` |
+| Host | Use the IP address of the VirtualBox Host-Only Adapter in the VM |
+| Port | 5432 |
+| Maintenance database | siwaka_dishes |
+| Username | siwaka_dishes_db_admin |
+| Password | (the password you set in the DDL script) |
+
+Continue executing the remaining lines of the DDL script (**line 142 to the end**) while connected to the `siwaka_dishes` database as `siwaka_dishes_db_admin`. This will create the tables in the `siwaka_dishes` database.
+
+Refresh the server connection in pgAdmin, and navigate to the `siwaka_dishes` database. You should see the created tables under `Databases` → `siwaka_dishes` → `Schemas` → `public` → `Tables`.
+
+**Step 3** — Load the data into the tables
 
 The `data/202605` directory also contains SQL scripts to load the data into the tables. Execute the scripts in the order specified (alphabetical order based on the name of the file).
+
+To do this, go to `Databases` → `siwaka_dishes` → `Schemas` → `public` → `Tables`, right-click on `Tables`, and select `Query Tool`. This will open a new query editor window.
+
+Open each of the data loading SQL files (e.g., `1_a_DML_general_data.sql`, then `1_c_DML_employee_data.sql`, then `2_b_DML_customer_data.sql`, etc.) by selecting `Open File...` in the query editor, and then execute the contents of each file to load the data into the corresponding tables. Execute the contents by select the `Execute script` icon (play button) in the toolbar of the query editor.
+
+This should be done one by one in the order of the files (alphabetical order based on the name of the file) to ensure that foreign key constraints are not violated.
 
 **Step 4** — Verify the data has loaded
 
@@ -39,8 +76,8 @@ SELECT COUNT(*) AS number_of_order_statuses__5 FROM order_status;
 SELECT COUNT(*) AS number_of_payment_methods__11 FROM payment_method;
 -- expect 11 rows
 SELECT COUNT(*) AS number_of_product_categories__11 FROM product_category;
--- expect 100 rows total
-SELECT COUNT(*) AS number_of_products__100 FROM product;
+-- expect 20 rows total
+SELECT COUNT(*) AS number_of_products__20 FROM product;
 -- expect 56 rows total
 SELECT COUNT(*) AS number_of_employees__56 FROM employee;
 -- expect 300 rows total
@@ -59,7 +96,7 @@ SELECT COUNT(*) AS number_of_customer_feedback__2500 FROM customer_feedback;
 
 ## Database Schema Reference
 
-Before writing any relational algebra, familiarise yourself with the relations and their attributes.
+Before writing any relational algebra, familiarize yourself with the relations and their attributes.
 
 ```text
 order_status      (order_status_id, status)
@@ -117,8 +154,8 @@ customer_feedback (customer_feedback_id, food_quality, service_quality,
 
 | Symbol | Operation |
 | --- | --- |
-| σ (sigma) | Selection |
-| Π (pi) | Projection |
+| σ | Selection |
+| Π | Projection |
 | ∪ | Union |
 | − | Set Difference |
 | ∩ | Intersection |

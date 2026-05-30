@@ -125,24 +125,23 @@ CREATE DATABASE siwaka_dishes
 OWNER siwaka_dishes_db_admin;
 
 -- =========================================
--- Connect to database
---
+
 -- IMPORTANT:
+-- STOP running the script here and switch users.
+-- 
+-- Connect to database using the `siwaka_dishes_db_admin` user
+-- psql -U siwaka_dishes_db_admin -W -d siwaka_dishes -h localhost
+-- 
 -- Tables should be created while connected as
--- siwaka_dishes_db_admin, otherwise the default
+-- `siwaka_dishes_db_admin`, otherwise the default
 -- privileges below may not apply as expected.
---
+-- 
 -- Tables will normally be created inside the
--- public schema.
--- Example:
--- public.branch
+-- public schema of the database.
 -- =========================================
 
--- psql -U siwaka_dishes_db_admin -d siwaka_dishes -h localhost
-
-
--- \c siwaka_dishes
--- public.branch
+-- Confirm the current user
+SELECT current_user;
 
 -- =========================================
 -- Secure the database and the public schema
@@ -313,9 +312,10 @@ DROP USER IF EXISTS siwaka_dishes_db_admin;
 
 */
 
--- We wrap the table creation in a transaction, so that if any step fails, we can roll back to a clean state.
+-- We can wrap the table creation in a transaction, so that if any step fails,
+-- we can roll back to a clean state.
 
-BEGIN;
+-- BEGIN;
 
 -- List of tables to create (in the specified order):
 -- 1. branch
@@ -551,4 +551,37 @@ CREATE TABLE customer_feedback (
     REFERENCES customer_order(order_number)
 );
 
-COMMIT;
+ALTER TABLE customer_feedback
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE order_detail
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE payment
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE payment_method
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE product
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE product_category
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE customer_order
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE order_status
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE customer
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE employee
+OWNER TO siwaka_dishes_db_admin;
+
+ALTER TABLE branch
+OWNER TO siwaka_dishes_db_admin;
+
+-- COMMIT;
